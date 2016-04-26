@@ -1,0 +1,286 @@
+\documentclass[12pt]{article}
+%\def\qed{\quad\vrule height7.5pt width4.17pt depth0pt}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{latexsym}
+\usepackage{graphicx}
+\usepackage{epsfig}
+\usepackage{url}
+\usepackage{ulem}
+\usepackage{enumerate}
+\pagestyle{empty}
+\setlength{\oddsidemargin}{0in}
+\setlength{\topmargin}{0in}
+\setlength{\textwidth}{6.5in}
+\setlength{\textheight}{8.5in}
+\usepackage{listings}
+\usepackage{color}
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}[lemma]{Theorem}
+\newcommand\gbin[2]{\genfrac{[}{]}{0pt}{}{#1}{#2}}
+\newcommand{\inv}{     \mathrm{inv}\, }
+\newcommand{\maj}{     \mathrm{maj}\, }
+\newcommand{\coinv}{     \mathrm{coinv}\, }
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+  language=Java,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
+\begin{document}
+
+\setlength{\fboxrule}{.5mm}\setlength{\fboxsep}{1.2mm}
+\newlength{\boxlength}\setlength{\boxlength}{\textwidth}
+\addtolength{\boxlength}{-4mm}
+\begin{center}\framebox{\parbox{\boxlength}{\bf
+Fun with Scala \hfill Study group 1 \\
+How is Binary Search like the Fibonacci numbers ?  \hfill \today}}\end{center}
+%\vspace{5mm}
+%\newgame
+ % \fenboard{r5k1/1b1p1ppp/p7/1p1Q4/2p1r3/PP4Pq/BBP2b1P/R4R1K w - - 0 20}
+ % \mbox{}
+ % \bigskip
+%\[\showboard\]
+\title{How is a Raven like a Writing Desk? Or How is Binary Search like Fibonacci?}
+\section{Describing a class of $\mathcal{O}\lg(n)$ Algorithms including Fibonacci}
+\subsection{A pattern based on performance (can ignore the math if you want)}
+
+An algorithm that operates in constant time on a recursive call of size $\frac{n}{2}$ is $\mathcal{O}\lg{n}$. For completeness we will prove this claim below. Here is the generic algorithm
+
+\subsubsection{Algorithm \textit{telescope}} 
+Input: size, \textit{halfer}, \textit{combine},  \textit{guard}, \textit{input} \\
+Output: accumulator
+\begin{enumerate}
+\item \texttt{guard(input)}
+\item 
+  \begin{enumerate}
+    \item \texttt{ half $ \leftarrow$ telescope(halfer,combiner,guard,halfer(input))}
+    \item \texttt{ ret $ \leftarrow$ combine(half,input)}
+    \item \texttt{ return ret}
+  \end{enumerate}
+\end{enumerate} 
+
+ We claim that the class of \textit{telescope} algorithms is $\mathcal{O}{\lg{n}}$
+\begin{proof}
+\[ t_n = t_{\frac{n}{2}} + c.\]
+Where $c$ is the presumed constant cost of the combiner function. For some $k$ set
+\[ n =: 2^{k} \]
+
+Define sequence $r_{0}, r_{1} , ...$ such that
+\[ r_{k} := t_{2^{k}}.\]
+now
+
+\begin{equation}
+\begin{aligned}
+ r_{k} &= r_{k-1} + c . \\
+\text{Setting } r_{0} & := 1 \text{ and summing both sides by} \sum_{i = 1}x^{i} \\
+r_{1}x + r_{2}x^{2} + r_{3}x^{3}+ ... & = r_{0}x + r_{1}x^{2} + r_{2}x^{3} +... + cx^{1} + cx^{2} + ... \\
+\text{let } R(x) &= \sum_{i=0}r_{i}x^{i} \\ 
+\text{and simplifying} \\
+        R(x) - 1 &= xR(x) + \frac{cx}{1-x}   \\
+ R(x) - xR(x)- 1 &= \frac{cx}{1-x} \\
+       R(x)(1-x) &= \frac{(c-1)x+1}{1-x} \\
+            R(x) &= \frac{(c-1)x+1}{(1-x)^{2}} \\
+\end{aligned}
+\end{equation}
+Now $r_{k}$ is the coefficient of $x^{k}$ in $R(x)$ which, by the generalized binomial theorem and substituting back for $k = \lg(n)$ is
+\[ c-1  \binom{k}{k-1} + \binom{k+1}{k} = (c -1)\lg{n} +\lg{n}+1 = c\lg{n} + 1. \]
+Since $c$ is a constant we are $\mathcal{O}\lg(n)$.
+\end{proof}
+
+The point is not to be overly formal, but to stress that we have a ``higher order'' recipe which guarantees a certain runtime performance. Here we are emphesising a recursive pattern, but other times our higher order function could handle diffferent execution contexts, such as ``map reduce''.
+
+\section{Lets go into some Scala}
+We have shown in the previous section the performance of a class of algorithms that takes an array and based on some constant operation either returns a result or recurses on exactly half of the input, results in $\mathcal{O}\lg{n}$ runtime. Lets look at some examples, and see how we can leverage Scala's declarative abstraction to create a higher order function which leverages common patterns.
+
+\subsection{Excercise. Write Scala code to compute $x^{n}$, can you get an impure algorithm? A pure algorithm? Can you get a $\mathcal{O}\lg{n}$ algorithm? }
+Solutions below:
+\begin{lstlisting}
+object Powers {
+
+  //linear time -- not the pattern we want
+  def oldSchool(x:Int, n:Int):Int = {
+    var i:Int = 0
+    var p:Int = x
+    while(i < n)
+    {
+      p = p * x
+      i = i + 1
+     }
+    p
+  }
+
+  //linear time -- still not the pattern (btw foreach is nice but not pure)
+  def newerSchool(x:Int, n:Int):Int = {
+    var p:Int = x
+    val li = new List(n).fill(x)
+    li.foreach(x => p = p*x)
+    p
+  }
+
+  //linear time but pure -- not the pattern from the first section
+  @talrec
+  def noLoops(x:Int,n:Int, acc:Int = 1):Int = n match {
+    case 0 => acc
+    case _ => noLoops(x, n-1, acc*x)
+    }
+  
+  //lgn runtime. exploits that x^n = x^n/2 * x^n/2. not tail recursive though!
+  def logNpow(x:Int, n:Int):Int = {
+    if(n == 1)
+      x
+    else if(n mod 2 == 0)
+    {
+      val half = logNpow(x,n/2)
+      half * half
+    }
+    else{
+      val half = logNpow(x, (n-1)/2)
+      half * half * x
+      }
+  }
+  // can we get a tail recursive version of the above?
+  // left to the reader
+
+}
+\end{lstlisting}
+Next lets see if we can plug this integer power algorithm into our telescope abstraction. We need to specify size, halfer, combine, guard, and input parameters. Lets start by figuring out their types based on our logNPow function above. The basic input parameter is $x$ so thats an Int. The notion of ``size'' probably applies to the exponent, here its $n$ which is also an Int. We can see that the first thing we do is to check if $n == 1$ and if so return the input. Thus guard: (Int,Int) $\Rightarrow$ Int...We will list the types below, and annotate with subscript thier corresponding parts from the program. 
+ 
+\begin{description}
+\item[val size]:   Int$_{n}$
+\item[val input]  Int$_{x}$
+\item[def guard]  (Int$_{n}$,Int$_{x}$)$\Rightarrow_{cond}$Int$_{res}$
+\item[def halfer] (Int$_{n}$,Int$_{x}$)$\Rightarrow$Int$_{half}$
+\item[def combine] (Int$_{n}$, Int$_{x}$, Int$_{half}$) $\Rightarrow$Int$_{res}$
+\item[def telescope] (size input guard halfer combine) $\Rightarrow$ Int
+\end{description}
+  
+Lets now write these and then write the integer power function in terms of these functions. \textit{halfer} needs to recursively call the higher level function \textit{telescope}.
+\textit{guard} is interesting since it only returns under some of the input, otherwise it is ignored. We will use a PartialFunction to model this behavior. The rest are pretty straightforward:
+\begin{lstlisting}
+ val guard:PartialFunction[(Int,Int),Int] =  {
+   case (1,x) => x
+   case (0,_) => 1
+ }
+
+ def halfer(n:Int, x:Int):Int = n \% 2 match {
+   case 0 => telescope(n/2,x,guard,halfer,combine)
+   case 1 => telescope((n-1)/2,x,guard,halfer,combine)
+ } 
+
+def combine(n:Int, x:Int, half:Int) = n \% 2 match {
+   case 0 => half * half
+   case 1 => half * half * x  //uhhh i think this is right..
+}
+
+//lets code this meta beast..
+def telescope(n:Int, x:Int, guard:PartialFunction[(Int,Int),Int], halfer: (Int,Int)=>Int, combine:(Int,Int,Int)=>Int):Int = {
+  if(guard.isDefinedAt(n,x))
+    guard(n,x)
+  else{                   //follow the bouncing ball...(it kind of writes itself)
+    val half = halfer(n,x)
+    combine(n,x,half)
+    }
+}
+//actually that really wasnt so bad, the function signature was a bit much but scala has conveniant ways of dealing with this...
+//(believe it or not this sh** actually compiles)
+scala> telescope(3,2,guard,halfer,combine)
+res0: Int = 8
+\end{lstlisting}
+
+\subsection{Lets Abstract the Types}
+\begin{description}
+\item[val size]   N$_{n}$
+\item[val input]  T$_{x}$
+\item[def guard]  (N$_{n}$,T$_{x}$)$\Rightarrow_{cond}$T$_{res}$
+\item[def halfer] (N$_{n}$,T$_{x}$)$\Rightarrow$T$_{half}$
+\item[def combine] (N$_{n}$, T$_{x}$, T$_{half}$) $\Rightarrow$T$_{res}$
+\item[def telescope] (size input guard halfer combine) $\Rightarrow$ T
+\end{description}
+
+Again, its not so bad. There are only two types. One for the object of type T, and one for the size of type N. We can now rewrite telescope to be much more general
+\begin{lstlisting}
+def telescope[N,T](n:N, x:T, guard:PartialFunction[(N,T),T], halfer: (N,T)=>T, combine:(N,T,T)=>T):T = {
+    if(guard.isDefinedAt(n,x))
+      guard(n,x)
+    else{
+      val half = halfer(n,x)
+      combine(n,x,half)
+    }
+  }
+//guess what, it still works without any further changes!
+scala> telescope(5,2,guard,halfer,combine)
+res1: Int = 32
+
+
+// we can clean it up using currying and implicits
+  def telescope[N,T](n:N, x:T)(implicit guard:PartialFunction[(N,T),T], halfer: (N,T)=>T, combine:(N,T,T)=>T):T = {
+    if(guard.isDefinedAt(n,x))
+      guard(n,x)
+    else{
+      val half = halfer(n,x)
+      combine(n,x,half)
+    }
+  }
+
+  scala> def powInt = telescope(_:Int,_:Int)(guard,halfer,combine)
+  powInt: (Int, Int) => Int
+
+  scala> powInt(2,6)
+  res7: Int = 36
+
+//or maybe better
+def telescope[N,T](guard:PartialFunction[(N,T),T], halfer: (N,T)=>T, combine:(N,T,T)=>T)(n:N, x:T):T = {
+    if(guard.isDefinedAt(n,x))
+      guard(n,x)
+    else{
+      val half = halfer(n,x)
+      combine(n,x,half)
+    }
+  }
+
+scala> def powInt = telescope(guard,halfer,combine) _
+powInt: (Int, Int) => Int
+
+scala> powInt(2,4)
+res0: Int = 16
+ 
+\end{lstlisting}
+
+\subsection{Excercise. Write Scala code to compute $M^{n}$ where $M$ is a $2 \times 2$ matrix}
+
+\begin{lstlisting}
+//one possibility for simplistic two by two matrix representation.. 
+case class TwoByTwo(r00:Int, r01:Int, r10:Int, r11:Int)
+...
+\end{lstlisting}
+
+hint: \textit{matrix powers and integer powers are somewhat similar}
+
+\subsection{Excercise. Write Scala code to compute the $n$th fibonacci.}
+
+\textit{hint} : $M_{fib} := \left(\begin{matrix} 1 & 1 \\  1 & 0 \end{matrix} \right)$
+\textit{what is $M_{fib}^{3}$ in terms of the fibonaccis ?}
+
+
+\subsection{write binary search}
+use a different notion of size for $N := (Int,Int)$ 
+\end{document}
+
+
